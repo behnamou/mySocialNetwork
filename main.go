@@ -11,25 +11,30 @@ import (
 )
 
 func homepage(w http.ResponseWriter, r *http.Request) {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	fmt.Println("test0")
-	myRouter.HandleFunc("/register", register).Methods("POST")
-
-	fmt.Println("test1")
-	log.Fatal(http.ListenAndServe(":4200", myRouter))
-}
-
-func register(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("test3")
-	reqBody, _ := ioutil.ReadAll(r.Body)
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	var member Member
-	json.Unmarshal(reqBody, &member)
-	fmt.Println("test4")
+	err = json.Unmarshal(reqBody, &member)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Print("Err Unmarshal")
+		return
+	}
+
+	//insert member to database
+
+	//respnse 200 to writer
+
 }
 
 func handleRequests() {
-	http.HandleFunc("v1/auth", homepage)
-	log.Fatal(http.ListenAndServe(":4200", nil))
+	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("v1/auth/register", homepage).Methods("POST")
+
+	log.Fatal(http.ListenAndServe(":10000", myRouter))
 }
 
 func main() {
