@@ -54,6 +54,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	member.ID = res.InsertedID.(primitive.ObjectID)
 
 	//response 200 to writer
@@ -64,7 +65,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("v1/auth/register", homepage).Methods("POST")
+	myRouter.HandleFunc("/v1/auth/register", homepage).Methods(http.MethodPost)
 
 	log.Fatal(http.ListenAndServe(":10000", myRouter))
 }
@@ -75,7 +76,7 @@ func main() {
 }
 
 type Member struct {
-	ID       primitive.ObjectID `bson:"id"`
+	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Username string
 	Name     string
 	Lastname string
