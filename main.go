@@ -84,3 +84,7 @@ type Member struct {
 	Email    string
 	Password string
 }
+
+// add api validaton
+//	send sms when donw
+//	send email when done
