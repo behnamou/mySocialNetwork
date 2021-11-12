@@ -131,13 +131,15 @@ func main() {
 
 type Member struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username string
-	Name     string
-	Lastname string
+	Username string             `validate:"string,min=2,max=20"`
+	Name     string             `validate:"string,min=2,max=20"`
+	Lastname string             `validate:"string,min=2,max=20"`
 	Mobile   string
-	Email    string
-	Password string
+	Email    string `validate:"email"`
+	Password string `validate:"string,min=8,max=50"`
 }
+
+const tagName = "validate"
 
 // add api validaton
 //	send sms when done
