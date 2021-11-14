@@ -11,6 +11,7 @@ import (
 
 	"net/smtp"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/kavenegar/kavenegar-go"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -52,6 +53,13 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 	memberCollection := client.Database("test").Collection("Member")
 
+	//	validation
+
+	validate := validator.New()
+	validate.RegisterValidation("mobileValidation", mobileValidation)
+	validate.RegisterValidation("emailValidation", emailValidation)
+
+	//	------------------
 	res, err := memberCollection.InsertOne(ctx, member)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -70,6 +78,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 	//response 200 to writer
 
 	w.WriteHeader(http.StatusOK)
+	fmt.Println("homepage done")
 
 }
 
@@ -93,9 +102,11 @@ func sendEmail(toEmail string) {
 	}
 
 	log.Print("sent, Done")
+	fmt.Println("email sent")
 }
 
 func sendSMS(sendNumber string) {
+	time.Sleep(time.Duration(time.Second * 10))
 	api := kavenegar.New("663171736B65374D61476E67475957743543326F474F3254777943347469675063307845302F54384736673D")
 	sender := "10008663"
 	receptor := []string{sendNumber}
@@ -115,6 +126,9 @@ func sendSMS(sendNumber string) {
 			fmt.Println("Status    	= ", r.Status)
 		}
 	}
+	fmt.Println("sms sent")
+	// fmt.Println("sms before duration")
+
 }
 
 func handleRequests() {
@@ -129,17 +143,25 @@ func main() {
 	fmt.Println("hello")
 }
 
-type Member struct {
-	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username string             `validate:"string,min=2,max=20"`
-	Name     string             `validate:"string,min=2,max=20"`
-	Lastname string             `validate:"string,min=2,max=20"`
-	Mobile   string
-	Email    string `validate:"email"`
-	Password string `validate:"string,min=8,max=50"`
+func mobileValidation(f1 validator.FieldLevel) bool {
+	return false
 }
 
-const tagName = "validate"
+func emailValidation(f1 validator.FieldLevel) bool {
+	return false
+}
+
+type Member struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username string             `validate:"required,min=2,max=20"`
+	Name     string             `validate:"required,min=2,max=20"`
+	Lastname string             `validate:"required,min=2,max=20"`
+	Mobile   string             `validate:"required,mobileValidation"`
+	Email    string             `validate:"required,emailValidation"`
+	Password string             `validate:"required,min=8,max=50"`
+}
+
+// const tagName = "validate"
 
 // add api validaton
 //	send sms when done
