@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func homepage(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +49,15 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//	------------------
+
+	// set password to hash
+
+	newPass, err := HashPassword(member.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	member.Password = newPass
 
 	//insert member to database
 	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb+srv://behnamou:Behnam-2384@cluster0.u2qxk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"))
@@ -85,6 +95,11 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Println("homepage done")
 
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
 }
 
 func sendEmail(toEmail string) {
@@ -154,12 +169,12 @@ func main() {
 
 type Member struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username string             `validate:"required,gte=2,lse=20"` // have to add checks for not been repeated
-	Name     string             `validate:"required,gte=2,lse=20"`
-	Lastname string             `validate:"required,gte=2,lse=20"`
-	Mobile   string             `validate:"required"`       // have to add checks for not been repeated
-	Email    string             `validate:"required,email"` // have to add checks for not been repeated
-	Password string             `validate:"required,gte=8,lte=50"`
+	Username string             `validate:"required,gte=2"` // have to add checks for not been repeated
+	Name     string             `validate:"required,gte=2"`
+	Lastname string             `validate:"required,gte=2"`
+	Mobile   string             `validate:"required,startswith=09,len=11"` // have to add checks for not been repeated
+	Email    string             `validate:"required,email"`                // have to add checks for not been repeated
+	Password string             `validate:"required,gte=8"`
 }
 
 // const tagName = "validate"
