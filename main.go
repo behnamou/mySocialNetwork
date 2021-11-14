@@ -37,6 +37,18 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//	validation
+
+	validate := validator.New()
+
+	err = validate.Struct(member)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	//	------------------
+
 	//insert member to database
 	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb+srv://behnamou:Behnam-2384@cluster0.u2qxk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"))
 	if err != nil {
@@ -53,13 +65,6 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 	memberCollection := client.Database("test").Collection("Member")
 
-	//	validation
-
-	validate := validator.New()
-	validate.RegisterValidation("mobileValidation", mobileValidation)
-	validate.RegisterValidation("emailValidation", emailValidation)
-
-	//	------------------
 	res, err := memberCollection.InsertOne(ctx, member)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,22 +148,18 @@ func main() {
 	fmt.Println("hello")
 }
 
-func mobileValidation(f1 validator.FieldLevel) bool {
-	return false
-}
-
-func emailValidation(f1 validator.FieldLevel) bool {
-	return false
-}
+// func mobileValidation(f1 validator.FieldLevel) bool {
+// 	return false
+// }
 
 type Member struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username string             `validate:"required,min=2,max=20"`
-	Name     string             `validate:"required,min=2,max=20"`
-	Lastname string             `validate:"required,min=2,max=20"`
-	Mobile   string             `validate:"required,mobileValidation"`
-	Email    string             `validate:"required,emailValidation"`
-	Password string             `validate:"required,min=8,max=50"`
+	Username string             `validate:"required,gte=2,lse=20"` // have to add checks for not been repeated
+	Name     string             `validate:"required,gte=2,lse=20"`
+	Lastname string             `validate:"required,gte=2,lse=20"`
+	Mobile   string             `validate:"required"`       // have to add checks for not been repeated
+	Email    string             `validate:"required,email"` // have to add checks for not been repeated
+	Password string             `validate:"required,gte=8,lte=50"`
 }
 
 // const tagName = "validate"
