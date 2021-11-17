@@ -129,12 +129,14 @@ func handleRequests() {
 
 	myRouter.HandleFunc("/login", SignIn).Methods(http.MethodPost)
 
+	myRouter.HandleFunc("/test", TestLoggedIn).Methods(http.MethodGet)
+
 	log.Fatal(http.ListenAndServe(":10000", myRouter))
 }
 
-func HashPassword(password string) (string,error) {
-	bytes,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)
-	return string(bytes),err
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
 }
 
 func SignIn(w http.ResponseWriter, r *http.Request) {
@@ -172,8 +174,8 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err=bcrypt.CompareHashAndPassword([]byte(logedInMember.Password),[]byte(creds.Password))
-	if err!=nil {
+	err = bcrypt.CompareHashAndPassword([]byte(logedInMember.Password), []byte(creds.Password))
+	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -251,4 +253,28 @@ func sendSMS(sendNumber string) {
 
 }
 
-func Test(){}
+func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session_token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	sessionToken := c.Value
+
+	response, err := cache.Do("GET", sessionToken)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if response == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	w.Write([]byte(fmt.Sprintf("Test Passed\nWelcome %s!", response)))
+
+}
