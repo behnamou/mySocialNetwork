@@ -25,6 +25,27 @@ import (
 
 var cache redis.Conn
 
+type Credentials struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
+type Member struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username string             `validate:"required,gte=2"` // have to add checks for not been repeated
+	Name     string             `validate:"required,gte=2"`
+	Lastname string             `validate:"required,gte=2"`
+	Mobile   string             `validate:"required,startswith=09,len=11"` // have to add checks for not been repeated
+	Email    string             `validate:"required,email"`                // have to add checks for not been repeated
+	Password string             `validate:"required,gte=8"`
+}
+
+func main() {
+	initCache()
+	handleRequests()
+	fmt.Println("hello")
+}
+
 func homepage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -102,9 +123,84 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
+func handleRequests() {
+	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/v1/auth/register", homepage).Methods(http.MethodPost)
+
+	myRouter.HandleFunc("/login", SignIn).Methods(http.MethodPost)
+
+	log.Fatal(http.ListenAndServe(":10000", myRouter))
+}
+
+func HashPassword(password string) (string,error) {
+	bytes,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)
+	return string(bytes),err
+}
+
+func SignIn(w http.ResponseWriter, r *http.Request) {
+	var creds Credentials
+
+	err := json.NewDecoder(r.Body).Decode(&creds)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var logedInMember Member
+
+	// 	coonect database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb+srv://behnamou:Behnam-2384@cluster0.u2qxk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = client.Connect(ctx)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer client.Disconnect(ctx)
+
+	memberCollection := client.Database("test").Collection("Member")
+
+	if err = memberCollection.FindOne(ctx, bson.M{}).Decode(&logedInMember); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err=bcrypt.CompareHashAndPassword([]byte(logedInMember.Password),[]byte(creds.Password))
+	if err!=nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	// sessionToken := uuid.NewRandom().String()
+	sessionToken := uuid.New().String()
+
+	_, err = cache.Do("SETEX", sessionToken, "300", creds.Username)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "session_token",
+		Value:   sessionToken,
+		Expires: time.Now().Add(300 * time.Second),
+	})
+
+}
+
+func initCache() {
+	conn, err := redis.DialURL("redis://localhost")
+	if err != nil {
+		panic(err)
+	}
+	cache = conn
 }
 
 func sendEmail(toEmail string) {
@@ -131,7 +227,6 @@ func sendEmail(toEmail string) {
 }
 
 func sendSMS(sendNumber string) {
-	time.Sleep(time.Duration(time.Second * 10))
 	api := kavenegar.New("663171736B65374D61476E67475957743543326F474F3254777943347469675063307845302F54384736673D")
 	sender := "10008663"
 	receptor := []string{sendNumber}
@@ -156,108 +251,4 @@ func sendSMS(sendNumber string) {
 
 }
 
-func handleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/v1/auth/register", homepage).Methods(http.MethodPost)
-
-	myRouter.HandleFunc("/login", signin).Methods(http.MethodPost)
-
-	log.Fatal(http.ListenAndServe(":10000", myRouter))
-}
-
-func signin(w http.ResponseWriter, r *http.Request) {
-	var creds Credentials
-
-	err := json.NewDecoder(r.Body).Decode(&creds)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	var logedInMember Member
-
-	enteredPassword, err := HashPassword(creds.Password)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	// 	coonect database
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb+srv://behnamou:Behnam-2384@cluster0.u2qxk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	err = client.Connect(ctx)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer client.Disconnect(ctx)
-
-	memberCollection := client.Database("test").Collection("Member")
-
-	if err = memberCollection.FindOne(ctx, bson.M{}).Decode(&logedInMember); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if enteredPassword != logedInMember.Password {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
-	// sessionToken := uuid.NewRandom().String()
-	sessionToken := uuid.New().String()
-
-	_, err = cache.Do("SETEX", sessionToken, "300", creds.Username)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "session_token",
-		Value:   sessionToken,
-		Expires: time.Now().Add(300 * time.Second),
-	})
-
-}
-
-func main() {
-	initCache()
-	handleRequests()
-	fmt.Println("hello")
-}
-
-func initCache() {
-	conn, err := redis.DialURL("redis://localhost")
-	if err != nil {
-		panic(err)
-	}
-	cache = conn
-}
-
-type Credentials struct {
-	Password string `json:"password"`
-	Username string `json:"username"`
-}
-
-type Member struct {
-	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username string             `validate:"required,gte=2"` // have to add checks for not been repeated
-	Name     string             `validate:"required,gte=2"`
-	Lastname string             `validate:"required,gte=2"`
-	Mobile   string             `validate:"required,startswith=09,len=11"` // have to add checks for not been repeated
-	Email    string             `validate:"required,email"`                // have to add checks for not been repeated
-	Password string             `validate:"required,gte=8"`
-}
-
-// const tagName = "validate"
-
-// add api validaton
-//	send sms when done
-//	send email when done
+func Test(){}
