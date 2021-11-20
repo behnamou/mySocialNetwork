@@ -269,8 +269,8 @@ func sendSMS(sendNumber string) {
 }
 
 func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	//ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	//defer cancel()
 
 	c, err := r.Cookie("session_token")
 	if err != nil {
@@ -281,9 +281,9 @@ func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	sessionToken := c.Value
+	//sessionToken := c.Value
 
-	response := redis.Conn{}.Get(ctx, sessionToken)
+	//response := redis.Conn{}.Get(ctx, sessionToken)
 
 	//response, err := cache.Do("GET", sessionToken)
 	//if err != nil {
@@ -291,11 +291,11 @@ func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	if response == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
+	//if response == nil {
+	//	w.WriteHeader(http.StatusUnauthorized)
+	//	return
+	//}
 
-	w.Write([]byte(fmt.Sprintf("Test Passed\nWelcome %s!", response)))
+	w.Write([]byte(fmt.Sprintf("Test Passed\nWelcome %s!", c)))
 
 }
