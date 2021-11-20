@@ -12,7 +12,6 @@ import (
 	"net/smtp"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/kavenegar/kavenegar-go"
@@ -21,9 +20,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/go-redis/redis/v8"
 )
 
-var cache redis.Conn
+//var cache redis.Conn
 
 type Credentials struct {
 	Password string `json:"password"`
@@ -41,7 +42,7 @@ type Member struct {
 }
 
 func main() {
-	initCache()
+	//initCache()
 	handleRequests()
 	fmt.Println("hello")
 }
@@ -148,7 +149,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var logedInMember Member
+	var loggedInMember Member
 
 	// 	coonect database
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -169,12 +170,14 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 
 	memberCollection := client.Database("test").Collection("Member")
 
-	if err = memberCollection.FindOne(ctx, bson.M{}).Decode(&logedInMember); err != nil {
+	if err = memberCollection.FindOne(ctx, bson.M{
+		"username": creds.Username,
+	}).Decode(&loggedInMember); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(logedInMember.Password), []byte(creds.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(loggedInMember.Password), []byte(creds.Password))
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -183,11 +186,23 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	// sessionToken := uuid.NewRandom().String()
 	sessionToken := uuid.New().String()
 
-	_, err = cache.Do("SETEX", sessionToken, "300", creds.Username)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	err = redisClient.Set(ctx, sessionToken, creds.Username, 300*time.Second).Err()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	//_, err = cache.Do("SETEX", sessionToken, "300", creds.Username)
+	//if err != nil {
+	//	w.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:    "session_token",
@@ -197,13 +212,13 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func initCache() {
-	conn, err := redis.DialURL("redis://localhost")
-	if err != nil {
-		panic(err)
-	}
-	cache = conn
-}
+//func initCache() {
+//conn, err := redis.DialURL("redis://localhost")
+//if err != nil {
+//	panic(err)
+//}
+//cache = conn
+//}
 
 func sendEmail(toEmail string) {
 	from := "bihnam998@gmail.com"
@@ -254,6 +269,9 @@ func sendSMS(sendNumber string) {
 }
 
 func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	c, err := r.Cookie("session_token")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -265,11 +283,14 @@ func TestLoggedIn(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionToken := c.Value
 
-	response, err := cache.Do("GET", sessionToken)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	response := redis.Conn{}.Get(ctx, sessionToken)
+
+	//response, err := cache.Do("GET", sessionToken)
+	//if err != nil {
+	//	w.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
+
 	if response == nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
